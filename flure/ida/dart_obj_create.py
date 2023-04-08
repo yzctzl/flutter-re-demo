@@ -6,7 +6,7 @@ import ida_bytes, ida_name, ida_offset
 MAX_OBJ_NAME_LEN = 30
 
 def read_smi(smi_ptr):
-    smi_data = idc.get_qword(smi_ptr)
+    smi_data = ida_bytes.get_dword(smi_ptr)
     if smi_data & 1 == 0:
         return smi_data >> 1
     raise Exception(f"Invalid Smi at 0x{smi_ptr}: {smi_data}")
@@ -24,7 +24,7 @@ class DartObject(object):
     def __init__(self, dart_obj_ptr, create_object=False):
         self.dart_obj_ptr = dart_obj_ptr
         self.dart_obj_name = None
-        self.tag, _ = struct.unpack("<II", ida_bytes.get_bytes(self.dart_obj_ptr, 8))
+        self.tag = struct.unpack("<I", ida_bytes.get_bytes(self.dart_obj_ptr, 4))[0]
         if create_object:
             self.create_object()
 
@@ -39,8 +39,8 @@ class DartObject(object):
         idc.add_struc_member(x, "is_canonical_and_gc", -1, (idc.FF_BYTE | idc.FF_DATA) & 0xFFFFFFFF, -1, 1)
         idc.add_struc_member(x, "size_tag", -1, (idc.FF_BYTE | idc.FF_DATA) & 0xFFFFFFFF, -1, 1)
         idc.add_struc_member(x, "cid", -1, (idc.FF_WORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 2)
-        idc.add_struc_member(x, "padding", -1, (idc.FF_DWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 4)
-        idc.add_struc_member(x, "unk", -1, (idc.FF_QWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 8)
+        idc.add_struc_member(x, "unk_addr", -1, (idc.FF_DWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 4)  # padding
+        # idc.add_struc_member(x, "unk", -1, (idc.FF_QWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 8)
 
     def get_struct_len(self):
         return -1
@@ -49,7 +49,6 @@ class DartObject(object):
         return f"do{cid}"
 
     def rename_dart_obj(self, cid):
-
         idc.set_name(self.dart_obj_ptr, f"{self.get_prefix(cid)}_{self.dart_obj_ptr:x}",
                      ida_name.SN_FORCE | ida_name.SN_NOCHECK)
         # Because ida_name.SN_FORCE and ida_name.SN_NOCHECK, the name of the function can be different
@@ -79,17 +78,18 @@ class DartString1(DartObject):
         idc.add_struc_member(x, "is_canonical_and_gc", -1, (idc.FF_BYTE | idc.FF_DATA) & 0xFFFFFFFF, -1, 1)
         idc.add_struc_member(x, "size_tag", -1, (idc.FF_BYTE | idc.FF_DATA) & 0xFFFFFFFF, -1, 1)
         idc.add_struc_member(x, "cid", -1, (idc.FF_WORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 2)
+        idc.add_struc_member(x, "s_len", -1, (idc.FF_DWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 4)
         idc.add_struc_member(x, "padding", -1, (idc.FF_DWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 4)
-        idc.add_struc_member(x, "s_len", -1, (idc.FF_QWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 8)
+        # idc.add_struc_member(x, "s_len", -1, (idc.FF_QWORD | idc.FF_DATA) & 0xFFFFFFFF, -1, 8)
         idc.add_struc_member(x, "s", -1, (idc.FF_STRLIT | idc.FF_DATA) & 0xFFFFFFFF, idc.STRTYPE_C, 0)
 
     def get_struct_len(self):
-        return 16 + read_smi(self.dart_obj_ptr + 8)
+        return 12 + read_smi(self.dart_obj_ptr + 4)
 
     def rename_dart_obj(self, cid):
         try:
-            string_len = read_smi(self.dart_obj_ptr + 8)
-            string_data = ida_bytes.get_bytes(self.dart_obj_ptr + 16, string_len).decode("ascii")
+            string_len = read_smi(self.dart_obj_ptr + 4)
+            string_data = ida_bytes.get_bytes(self.dart_obj_ptr + 8, string_len).decode("utf8")
             idc.set_name(self.dart_obj_ptr, f"{self.get_prefix(cid)}_{string_data}"[:MAX_OBJ_NAME_LEN],
                          ida_name.SN_FORCE | ida_name.SN_NOCHECK)
             # Because ida_name.SN_FORCE and ida_name.SN_NOCHECK, the name of the function can be different
@@ -105,10 +105,10 @@ class DartObjectsCreator(object):
         self.object_pool_ptr = object_pool_ptr
         self.verbose = verbose
         self.dart_object_by_cid = {
-            0x55: DartString1
+            0x51: DartString1
         }
 
-        tag, _, self.nb_elt = struct.unpack("<IIQ", ida_bytes.get_bytes(self.object_pool_ptr, 16))
+        tag, _, self.nb_elt = struct.unpack("<HHI", ida_bytes.get_bytes(self.object_pool_ptr, 8))
         print(f"ObjectPool at 0x{self.object_pool_ptr:x} has {self.nb_elt} objects")
 
     def create_all_objects(self):
@@ -117,26 +117,26 @@ class DartObjectsCreator(object):
         nb_primitive_obj = 0
 
         for i in range(self.nb_elt):
-            dart_obj_ptr_ptr = self.object_pool_ptr + 16 + 8 * i
-            dart_obj_ptr = idc.get_qword(dart_obj_ptr_ptr)
-            if dart_obj_ptr & 1 == 1:
-                dart_obj_ptr = dart_obj_ptr - 1
+            dart_obj_ptr_ptr = self.object_pool_ptr + 8 + 4 * i
+            dart_obj_ptr = ida_bytes.get_dword(dart_obj_ptr_ptr)
+            if dart_obj_ptr & 1 == 1:  # 奇数 代表 object ；偶数 代表 数字
+                dart_obj_ptr = dart_obj_ptr - 1  # -1 获取真实地址
                 if dart_obj_ptr not in known_dart_obj:
-                    tag, _ = struct.unpack("<II", ida_bytes.get_bytes(dart_obj_ptr, 8))
+                    tag = struct.unpack("<I", ida_bytes.get_bytes(dart_obj_ptr, 4))[0]  # ??? <I 4
                     cid, size_tag, is_canonical, gc_data = get_info_from_tag(tag)
                     if cid in self.dart_object_by_cid:
                         known_dart_obj[dart_obj_ptr] = self.dart_object_by_cid[cid](dart_obj_ptr, create_object=True)
                     else:
                         known_dart_obj[dart_obj_ptr] = DartObject(dart_obj_ptr, create_object=True)
 
-                ida_offset.op_offset(dart_obj_ptr_ptr, 0, idc.REF_OFF64)
+                ida_offset.op_offset(dart_obj_ptr_ptr, 0, idc.REF_OFF32)  # 这步做了什么？？？
                 if known_dart_obj[dart_obj_ptr].dart_obj_name is not None:
                     idc.set_name(dart_obj_ptr_ptr, f"p_{known_dart_obj[dart_obj_ptr].dart_obj_name}",
                                  ida_name.SN_FORCE | ida_name.SN_NOCHECK)
             elif ida_bytes.is_mapped(dart_obj_ptr):
                 if self.verbose:
                     print(f"At 0x{dart_obj_ptr_ptr:x}: Address found with value 0x{dart_obj_ptr:x}")
-                ida_offset.op_offset(dart_obj_ptr_ptr, 0, idc.REF_OFF64)
+                ida_offset.op_offset(dart_obj_ptr_ptr, 0, idc.REF_OFF32)
                 address_name = idc.get_name(dart_obj_ptr)
                 if address_name is not None:
                     idc.set_name(dart_obj_ptr_ptr, f"p_{address_name}", ida_name.SN_FORCE | ida_name.SN_NOCHECK)

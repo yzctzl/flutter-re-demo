@@ -17,13 +17,13 @@ class MyMopVisitor(ida_hexrays.mop_visitor_t):
             return 0
         if op.t != ida_hexrays.mop_r:
             return 0
-        if mop_info != "x27.8":
+        if mop_info != "r5.4":
             return 0
-        op.make_number(OBJECT_POOL_PTR, 8)
+        op.make_number(OBJECT_POOL_PTR, 4)
         return 0
 
 
-class X27ReplaceHook(ida_hexrays.Hexrays_Hooks):
+class R5ReplaceHook(ida_hexrays.Hexrays_Hooks):
     def microcode(self, mba: ida_hexrays.mba_t) -> "int":
         x = MyMopVisitor()
         return mba.for_all_ops(x)

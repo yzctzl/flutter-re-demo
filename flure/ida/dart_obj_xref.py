@@ -6,23 +6,23 @@ import idc
 import ida_bytes, ida_name, ida_offset
 
 
-LOAD_X27_PATTERN = "\[X27,#0x(\S*)\]"
-RE_LOAD_X27_PATTERN = re.compile(LOAD_X27_PATTERN)
+LOAD_R5_PATTERN = "\[R5,#0x(\S*)\]"
+RE_LOAD_R5_PATTERN = re.compile(LOAD_R5_PATTERN)
 
 
-# ADD             <reg_tmp>, X27, #0x<index_high>,LSL#<index_high_shift>
-ADD_X27_PATTERN = "ADD             (\S*), X27, #0x(\S*),LSL#(\S*)"
-RE_ADD_X27_PATTERN = re.compile(ADD_X27_PATTERN)
+# ADD             <reg_tmp>, R5, #0x<index_high>,LSL#<index_high_shift>
+ADD_R5_PATTERN = "ADD             (\S*), R5, #0x(\S*),LSL#(\S*)"
+RE_ADD_R5_PATTERN = re.compile(ADD_R5_PATTERN)
 # LDR             <reg_dst>, [<reg_tmp>,#0x<index_low>]
 LDR_AFTER_ADD_PATTERN = "LDR             (\S*), \[(\S*),#0x(\S*)\]"
 RE_LDR_AFTER_ADD_PATTERN = re.compile(LDR_AFTER_ADD_PATTERN)
 
 
 def get_dart_object_index_pattern_1(addr):
-    # LDR <reg_dst>, [X27,#0x<index>]
+    # LDR <reg_dst>, [R5,#0x<index>]
     if idc.print_insn_mnem(addr) != "LDR":
         return None
-    match_info = RE_LOAD_X27_PATTERN.match(idc.print_operand(addr, 1))
+    match_info = RE_LOAD_R5_PATTERN.match(idc.print_operand(addr, 1))
     if not match_info:
         return None
     obj_index = int(match_info.group(1), 16)
@@ -33,9 +33,9 @@ def get_dart_object_index_pattern_2(addr):
     # To speed up a bit
     # if (idc.print_insn_mnem(addr) != "ADD") or (idc.print_insn_mnem(idc.next_head(addr)) != "LDR"):
     #     return False
-    # ADD             <reg_tmp>, X27, #0x<index_high>,LSL#<index_high_shift>
+    # ADD             <reg_tmp>, R5, #0x<index_high>,LSL#<index_high_shift>
     disasm_line = idc.generate_disasm_line(addr, 0)
-    add_match_info = RE_ADD_X27_PATTERN.match(disasm_line)
+    add_match_info = RE_ADD_R5_PATTERN.match(disasm_line)
     if not add_match_info:
         return None
     disasm_line = idc.generate_disasm_line(idc.next_head(addr), 0)

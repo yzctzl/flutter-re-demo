@@ -10,7 +10,7 @@ from flure.ida.dart_obj_create import DartObjectsCreator
 
 
 if __name__ == "__main__":
-    object_pool_address = ida_kernwin.ask_addr(0x7200600040, "Please enter Object Pool address")
+    object_pool_address = ida_kernwin.ask_addr(0xbc980021 - 1, "Please enter Object Pool address")
     if object_pool_address is not None:
         dart_object_creator = DartObjectsCreator(object_pool_address)
         dart_object_creator.create_all_objects()

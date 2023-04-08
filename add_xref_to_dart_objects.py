@@ -10,6 +10,6 @@ from flure.ida.dart_obj_xref import parse_code_and_add_dart_object_xref
 
 
 if __name__ == "__main__":
-    object_pool_address = ida_kernwin.ask_addr(0x7200600040, "Please enter Object Pool address")
+    object_pool_address = ida_kernwin.ask_addr(0xbc980021 - 1, "Please enter Object Pool address")
     if object_pool_address is not None:
         parse_code_and_add_dart_object_xref(object_pool_address)

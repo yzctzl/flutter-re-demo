@@ -1,6 +1,8 @@
 import json
 import argparse
 
+import os, sys
+sys.path.append(os.path.dirname(__file__))
 
 from flure.parser.dwarf import DwarfParser
 from flure.parser.reflutter import ReFlutterDumpParser
